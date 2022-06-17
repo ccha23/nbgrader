@@ -244,7 +244,7 @@ However, this requires a consistent mapping to UIDs across the
 cluster.  This is not difficult to do, but if often not the way that
 "cloud stuff" works by default.
 
-The default filesystem exchange path is ``/srv/nbgrader/exchange``.
+The default filesystem exchange path is ``/usr/local/share/nbgrader/exchange``.
 In a UNIX file system, this is by default owned by the root user, so
 you will need to use a bit of knowledge to set things up properly.
 
@@ -415,4 +415,4 @@ See also
 * Noteable service, based on nbgrader
 
   * `Student guide <https://noteable.edina.ac.uk/student-guide/>`__
-  * `Instructor guide <https://noteable.edina.ac.uk/nbguide/>`__
+  * `Instructor guide <https://noteable.edina.ac.uk/documentation/nbguide/>`__

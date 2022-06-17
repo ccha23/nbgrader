@@ -4,105 +4,59 @@
 # Copyright (c) Jupyter Development Team.
 # Distributed under the terms of the Modified BSD License.
 
+from setuptools import setup
+from jupyter_packaging import create_cmdclass
+from pathlib import Path
+import json
+import sys
 import os
-from setuptools import setup, find_packages
 
-# get paths to all the extension files
-extension_files = []
-for (dirname, dirnames, filenames) in os.walk("nbgrader/nbextensions"):
-    root = os.path.relpath(dirname, "nbgrader")
-    for filename in filenames:
-        if filename.endswith(".pyc"):
-            continue
-        extension_files.append(os.path.join(root, filename))
+HERE = Path(__file__).parent.resolve()
 
-# get paths to all the docs
-docs_files = []
-for (dirname, dirnames, filenames) in os.walk("nbgrader/docs"):
-    root = os.path.relpath(dirname, "nbgrader")
-    if root.startswith(os.path.join("docs", "build")):
-        continue
-    if "__pycache__" in root:
-        continue
-    for filename in filenames:
-        if filename.endswith(".pyc"):
-            continue
-        docs_files.append(os.path.join(root, filename))
+# Get the package info from package.json
+pkg_json = json.loads((HERE / "package.json").read_bytes())
 
-# get paths to all the static files and templates
-static_files = []
-for (dirname, dirnames, filenames) in os.walk("nbgrader/server_extensions/formgrader/static"):
-    root = os.path.relpath(dirname, "nbgrader/server_extensions/formgrader")
-    for filename in filenames:
-        static_files.append(os.path.join(root, filename))
-for (dirname, dirnames, filenames) in os.walk("nbgrader/server_extensions/formgrader/templates"):
-    root = os.path.relpath(dirname, "nbgrader/server_extensions/formgrader")
-    for filename in filenames:
-        static_files.append(os.path.join(root, filename))
+lab_path = (HERE / pkg_json["jupyterlab"]["outputDir"])
 
-# get paths to all the alembic files
-alembic_files = ["alembic.ini"]
-for (dirname, dirnames, filenames) in os.walk("nbgrader/alembic"):
-    root = os.path.relpath(dirname, "nbgrader")
-    for filename in filenames:
-        if filename.endswith(".pyc"):
-            continue
-        alembic_files.append(os.path.join(root, filename))
+# Representative files that should exist after a successful build
+ensured_targets = [
+    str(lab_path / "package.json"),
+    str(lab_path / "static/style.js")
+]
 
+labext_name = pkg_json["name"]
 
-name = u'nbgrader'
-here = os.path.abspath(os.path.dirname(__file__))
-version_ns = {}
-with open(os.path.join(here, name, '_version.py')) as f:
-    exec(f.read(), {}, version_ns)
+data_files_spec = [
+    # labextension installation
+    ("etc/jupyter/jupyter_server_config.d", "etc/jupyter/jupyter_server_config.d/", "*.json"),
+    # For backward compatibility with notebook server
+    ("etc/jupyter", "etc/jupyter/", "*.json"),
+    # labextension files
+    ("share/jupyter/labextensions/%s" % labext_name, str(lab_path.relative_to(HERE)), "**"),
+    ("share/jupyter/labextensions/%s" % labext_name, str("."), "install.json"),
+]
 
-setup_args = dict(
-    name=name,
-    version=version_ns['__version__'],
-    description='A system for assigning and grading notebooks',
-    author='Jupyter Development Team',
-    author_email='jupyter@googlegroups.com',
-    license='BSD',
-    url='https://github.com/jupyter/nbgrader',
-    keywords=['Notebooks', 'Grading', 'Homework'],
-    classifiers=[
-        'License :: OSI Approved :: BSD License',
-        'Programming Language :: Python',
-        'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.5',
-        'Programming Language :: Python :: 3.6',
-    ],
-    packages=find_packages(),
-    package_data={
-        'nbgrader': extension_files + docs_files + alembic_files,
-        'nbgrader.nbgraderformat': ["*.json"],
-        'nbgrader.server_extensions.formgrader': static_files,
-        'nbgrader.tests': [
-            'apps/files/*',
-            'nbextensions/files/*',
-            'preprocessors/files/*'
-        ]
-    },
-    entry_points={
-        'console_scripts': ['nbgrader=nbgrader.apps.nbgraderapp:main']
-    },
-    install_requires=[
-        "sqlalchemy",
-        "python-dateutil",
-        "jupyter",
-        "notebook>=4.2",
-        "nbconvert==5.6.1",
-        "nbformat",
-        "traitlets==4.3.3",
-        "jupyter_core",
-        "jupyter_client",
-        "tornado",
-        "requests",
-        "jsonschema",
-        "alembic",
-        "rapidfuzz"
-    ]
-)
+setup_args = dict()
+
+if not os.getenv("NBGRADER_NO_LAB"):
+    try:
+        from jupyter_packaging import (
+            wrap_installers,
+            npm_builder,
+            get_data_files
+        )
+
+        post_develop = npm_builder(
+            build_cmd="install:labextension", source_dir="src", build_dir=lab_path, npm="jlpm"
+        )
+        setup_args["cmdclass"] = wrap_installers(post_develop=post_develop, ensured_targets=ensured_targets)
+        setup_args["data_files"] = get_data_files(data_files_spec)
+    except ImportError as e:
+        import logging
+        logging.basicConfig(format="%(levelname)s: %(message)s")
+        logging.warning("Build tool `jupyter-packaging` is missing. Install it with pip or conda.")
+        if not ("--name" in sys.argv or "--version" in sys.argv):
+            raise e
 
 if __name__ == "__main__":
     setup(**setup_args)
